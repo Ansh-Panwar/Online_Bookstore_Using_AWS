@@ -98,3 +98,50 @@ resource "aws_instance" "bookstore" {
     Name = "bookstore-instance"
   }
 }
+
+# Allocate a static Elastic IP
+resource "aws_eip" "bookstore_eip" {
+  vpc = true
+  depends_on = [aws_internet_gateway.igw]   # ensure IGW exists first
+}
+
+# Attach it to the EC2 instance
+resource "aws_eip_association" "bookstore_eip_assoc" {
+  instance_id   = aws_instance.bookstore.id
+  allocation_id = aws_eip.bookstore_eip.id
+}
+
+# AWS Budget (Simulates AWS Trusted Advisor Cost Alert)
+resource "aws_budgets_budget" "cost_alert" {
+  name              = "monthly-cost-budget"
+  budget_type       = "COST"
+  limit_amount      = "5"
+  limit_unit        = "USD"
+  time_unit         = "MONTHLY"
+
+  cost_types {
+    include_credit             = true
+    include_discount           = true
+    include_other_subscription = true
+    include_recurring          = true
+    include_refund             = true
+    include_subscription       = true
+    include_support            = true
+    include_tax                = true
+    include_upfront            = true
+    use_amortized              = false
+    use_blended                = false
+  }
+
+  notification {
+    comparison_operator = "GREATER_THAN"
+    threshold           = 80
+    threshold_type      = "PERCENTAGE"
+    notification_type   = "ACTUAL"
+
+    subscriber {
+      address           = "anshpanwar197@gmail.com"  # <-- Replace with your email
+      subscription_type = "EMAIL"
+    }
+  }
+}
