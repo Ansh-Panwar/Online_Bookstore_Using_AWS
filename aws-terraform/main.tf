@@ -101,11 +101,14 @@ resource "aws_instance" "bookstore" {
 
 # Allocate a static Elastic IP
 resource "aws_eip" "bookstore_eip" {
-  vpc = true
-  depends_on = [aws_internet_gateway.igw]   # ensure IGW exists first
+  depends_on = [aws_internet_gateway.igw]   # wait for IGW
+  # domain defaults to "vpc" automatically for new accounts
+  tags = {
+    Name = "bookstore-eip"
+  }
 }
 
-# Attach it to the EC2 instance
+# Attach the EIP to the instance
 resource "aws_eip_association" "bookstore_eip_assoc" {
   instance_id   = aws_instance.bookstore.id
   allocation_id = aws_eip.bookstore_eip.id
@@ -113,13 +116,13 @@ resource "aws_eip_association" "bookstore_eip_assoc" {
 
 # AWS Budget (Simulates AWS Trusted Advisor Cost Alert)
 resource "aws_budgets_budget" "cost_alert" {
-  name              = "monthly-cost-budget"
-  budget_type       = "COST"
-  limit_amount      = "5"
-  limit_unit        = "USD"
-  time_unit         = "MONTHLY"
+  name         = "monthly-cost-budget"
+  budget_type  = "COST"
+  limit_unit   = "USD"
+  limit_amount = "5"
+  time_unit    = "MONTHLY"
 
-  cost_types {
+  cost_types {                       # unchanged
     include_credit             = true
     include_discount           = true
     include_other_subscription = true
@@ -134,14 +137,13 @@ resource "aws_budgets_budget" "cost_alert" {
   }
 
   notification {
-    comparison_operator = "GREATER_THAN"
-    threshold           = 80
-    threshold_type      = "PERCENTAGE"
-    notification_type   = "ACTUAL"
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
 
-    subscriber {
-      address           = "anshpanwar197@gmail.com"  # <-- Replace with your email
-      subscription_type = "EMAIL"
-    }
+    ## NEW STYLE — just pass e‑mail(s) as a list
+    subscriber_email_addresses = ["anshpanwar197@gmail.com"]
+    # subscriber_sns_topic_arns = ["arn:aws:sns:..."]   # optional
   }
 }
