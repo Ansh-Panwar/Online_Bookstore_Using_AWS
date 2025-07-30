@@ -106,6 +106,10 @@ resource "aws_instance" "bookstore" {
 # Allocate a static Elastic IP
 resource "aws_eip" "bookstore_eip" {
   vpc = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_eip_association" "eip_assoc" {
@@ -113,13 +117,6 @@ resource "aws_eip_association" "eip_assoc" {
   allocation_id = aws_eip.bookstore_eip.id
 }
 
-resource "aws_eip" "bookstore_eip" {
-  vpc = true
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
 
 # AWS Budget (Simulates AWS Trusted Advisor Cost Alert)
 resource "aws_budgets_budget" "cost_alert" {
