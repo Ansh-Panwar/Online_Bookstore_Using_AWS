@@ -76,42 +76,49 @@ resource "aws_security_group" "bookstore_sg" {
 
 # EC2 Instance
 resource "aws_instance" "bookstore" {
-  ami                    = "ami-0c02fb55956c7d316" # Amazon Linux 2 (update if needed)
-  instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.bookstore_sg.id]
-  key_name               = var.key_pair_name
+  ami           = "ami-0c02fb55956c7d316" # Amazon Linux 2 (update as needed)
+  instance_type = "t2.micro"
+  key_name      = "bookstore-key"
+  subnet_id     = aws_subnet.public_subnet.id
+  security_groups = [aws_security_group.bookstore_sg.name]
 
   user_data = <<-EOF
-              #!/bin/bash
-              yum update -y
-              curl -sL https://rpm.nodesource.com/setup_18.x | bash -
-              yum install -y nodejs git
-              git clone https://github.com/Ansh-Panwar/Online_Bookstore_Using_AWS.git
-              cd Online_Bookstore_Using_AWS/bookstore
-              npm install
-              npm run build
-              npm run start &
-              EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y git
+    curl -sL https://rpm.nodesource.com/setup_18.x | bash -
+    yum install -y nodejs
+
+    cd /home/ec2-user
+    git clone https://github.com/Ansh-Panwar/Online_Bookstore_Using_AWS.git
+    cd Online_Bookstore_Using_AWS/bookstore
+    npm install
+    npm run build
+    nohup npx next start -H 0.0.0.0 -p 3000 &
+  EOF
 
   tags = {
     Name = "bookstore-instance"
   }
 }
 
+
 # Allocate a static Elastic IP
 resource "aws_eip" "bookstore_eip" {
-  depends_on = [aws_internet_gateway.igw]   # wait for IGW
-  # domain defaults to "vpc" automatically for new accounts
-  tags = {
-    Name = "bookstore-eip"
-  }
+  vpc = true
 }
 
-# Attach the EIP to the instance
-resource "aws_eip_association" "bookstore_eip_assoc" {
+resource "aws_eip_association" "eip_assoc" {
   instance_id   = aws_instance.bookstore.id
   allocation_id = aws_eip.bookstore_eip.id
+}
+
+resource "aws_eip" "bookstore_eip" {
+  vpc = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # AWS Budget (Simulates AWS Trusted Advisor Cost Alert)
