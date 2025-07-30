@@ -80,7 +80,7 @@ resource "aws_instance" "bookstore" {
   instance_type = "t2.micro"
   key_name      = "bookstore-key"
   subnet_id     = aws_subnet.public.id
-  security_groups = [aws_security_group.bookstore_sg.name]
+  vpc_security_group_ids = [aws_security_group.bookstore_sg.id]
 
   user_data = <<-EOF
     #!/bin/bash
