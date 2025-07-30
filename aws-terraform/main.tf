@@ -79,7 +79,7 @@ resource "aws_instance" "bookstore" {
   ami           = "ami-0c02fb55956c7d316" # Amazon Linux 2 (update as needed)
   instance_type = "t2.micro"
   key_name      = "bookstore-key"
-  subnet_id     = aws_subnet.public_subnet.id
+  subnet_id     = aws_subnet.public.id
   security_groups = [aws_security_group.bookstore_sg.name]
 
   user_data = <<-EOF
@@ -105,7 +105,7 @@ resource "aws_instance" "bookstore" {
 
 # Allocate a static Elastic IP
 resource "aws_eip" "bookstore_eip" {
-  vpc = true
+  domain = "vpc"
 
   lifecycle {
     prevent_destroy = true
