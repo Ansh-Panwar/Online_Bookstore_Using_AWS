@@ -107,14 +107,96 @@ resource "aws_instance" "bookstore" {
 resource "aws_eip" "bookstore_eip" {
   domain = "vpc"
 
-  lifecycle {
+  /*lifecycle {
     prevent_destroy = true
-  }
+  }*/
 }
 
 resource "aws_eip_association" "eip_assoc" {
   instance_id   = aws_instance.bookstore.id
   allocation_id = aws_eip.bookstore_eip.id
+}
+
+# CloudWatch Alarm for High CPU Utilization
+resource "aws_cloudwatch_metric_alarm" "high_cpu_alarm" {
+  alarm_name          = "HighCPUUtilization"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "70"
+  alarm_description   = "This alarm triggers if CPU usage is above 70% for 4 minutes."
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  dimensions = {
+    InstanceId = aws_instance.bookstore.id
+  }
+}
+
+# SNS Topic for Alerts
+resource "aws_sns_topic" "alerts" {
+  name = "cloudwatch-alerts"
+}
+
+resource "aws_sns_topic_subscription" "email_alert" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = "anshpanwar197@gmail.com" 
+}
+
+# IAM Role for Lambda Function to Stop EC2 Instance
+resource "aws_iam_role" "lambda_stop_ec2_role" {
+  name = "lambda-stop-ec2-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action = "sts:AssumeRole",
+      Effect = "Allow",
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+# Attach the necessary policies to the IAM role
+resource "aws_iam_role_policy_attachment" "lambda_ec2_full" {
+  role       = aws_iam_role.lambda_stop_ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+# Lambda Function to Stop Idle EC2 Instance
+resource "aws_lambda_function" "stop_idle" {
+  function_name = "StopIdleEC2"
+  handler       = "stop_idle.lambda_handler"      # Python file is stop_idle.py
+  runtime       = "python3.10"
+  filename      = "${path.module}/lambda/function.zip"  
+  role          = aws_iam_role.lambda_stop_ec2_role.arn
+  timeout       = 30
+
+  source_code_hash = filebase64sha256("${path.module}/lambda/function.zip")
+}
+
+
+# CloudWatch Event Rule to trigger Lambda daily
+resource "aws_cloudwatch_event_rule" "daily_shutdown" {
+  name                = "daily-ec2-shutdown"
+  schedule_expression = "cron(0 22 * * ? *)"  # 10 PM UTC daily
+}
+
+resource "aws_cloudwatch_event_target" "lambda_trigger" {
+  rule      = aws_cloudwatch_event_rule.daily_shutdown.name
+  target_id = "StopIdleEC2"
+  arn       = aws_lambda_function.stop_idle.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.stop_idle.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.daily_shutdown.arn
 }
 
 
