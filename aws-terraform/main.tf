@@ -21,6 +21,24 @@ resource "aws_subnet" "public" {
   }
 }
 
+# Second Public Subnet
+resource "aws_subnet" "public_2" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "us-east-1b" # different AZ
+  tags = {
+    Name = "bookstore-subnet-2"
+  }
+}
+
+# Associate Route Table with second subnet
+resource "aws_route_table_association" "rta_2" {
+  subnet_id      = aws_subnet.public_2.id
+  route_table_id = aws_route_table.rt.id
+}
+
+
 # Internet Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
@@ -73,6 +91,62 @@ resource "aws_security_group" "bookstore_sg" {
     Name = "bookstore-sg"
   }
 }
+
+resource "aws_security_group" "alb_sg" {
+  name        = "alb-sg"
+  description = "Allow HTTP to ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_lb_target_group" "bookstore_tg" {
+  name        = "bookstore-tg"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "instance"
+
+  health_check {
+    path                = "/"
+    port                = "3000"
+    protocol            = "HTTP"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+}
+
+resource "aws_lb_target_group_attachment" "bookstore_attach" {
+  target_group_arn = aws_lb_target_group.bookstore_tg.arn
+  target_id        = aws_instance.bookstore.id
+  port             = 3000
+}
+
+resource "aws_lb" "bookstore_alb" {
+  name               = "bookstore-alb"
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = [
+    aws_subnet.public.id,
+    aws_subnet.public_2.id
+  ]
+}
+
 
 # EC2 Instance
 resource "aws_instance" "bookstore" {
